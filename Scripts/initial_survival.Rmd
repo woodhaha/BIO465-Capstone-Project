@@ -70,8 +70,95 @@ ggsurvplot(mutations.fit,
            legend.title="TP53 Mutation Status",
            legend.labs=c("No Mutation", "Mutation"),
            legend="right",
-           xlab="Years after diagnosis")
+           xlab="Years after diagnosis",
+           pval=TRUE)
 
-save.figure("survival_prob_TP53_mutation")
+save.figure("survival_prob_TP53_mutation.png")
+```
+
+### Survival: 8q CNV
+
+Get chromosome regions using biomaRt
+
+```{r}
+use.package(biomaRt, from=bioc)
+ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
+
+# Only use standard human chromosomes
+normal.chroms <- c(1:22, "X", "Y", "M")
+
+# Filter on HGNC symbol and chromosome, retrieve genomic location and band
+gene.symbols <- copy_nums.tidy$gene.symbol %>% unique()
+
+chrom.regions <- getBM(attributes=c("hgnc_symbol", "chromosome_name", "band"),
+                       filters=c("hgnc_symbol", "chromosome_name"),
+                       values=list(hgnc_symbol=gene.symbols, 
+                                   chromosome_name=normal.chroms), 
+                       mart=ensembl)
+detach.package(biomaRt)
+head(chrom.regions)
+```
+
+Parse out general chromosome area
+
+```{r}
+regions <- chrom.regions %>% 
+  rename(gene.symbol=hgnc_symbol, chrom=chromosome_name) %>% 
+  mutate(arm=sub("^([pq])\\d+(\\.\\d+)?", "\\1", band)) %>%
+  mutate(chrom.region=paste0(chrom, arm)) %T>% print() %>%
+  select(gene.symbol, chrom.region)
+```
+
+Plot KM curve
+
+```{r}
+cnv.survival <- copy_nums.tidy %>% 
+  inner_join(regions) %>%
+  filter(chrom.region=="8q") %>% 
+  group_by(sample.id) %>%
+  summarise(cnv.status=sum(cnv.status)>0) %>%
+  inner_join(phenotype.filtered) %>%
+  mutate(time1=ifelse(is.na(years_to_death), 
+                      years_to_last_followup, 
+                      years_to_death), 
+         event=as.numeric(vital_status=="DECEASED")) %>% 
+  select(sample.id, time1, event, cnv.status) %T>% print()
+  
+cnv.fit <-survfit(Surv(time1, event=event, type="right") ~ cnv.status, data=cnv.survival)
+
+ggsurvplot(cnv.fit, 
+           legend.title="8q CNV Status",
+           legend.labs=c("No CNV", "CNV"),
+           legend="right",
+           xlab="Years after diagnosis",
+           pval=T)
+
+save.figure("survival_prob_8q_cnv.png")
+```
+
+### Survival: TP53 mutation and 8q CNV
+
+```{r}
+tp53.8q.survival <- mutations.survival %>%
+  inner_join(cnv.survival) %>%
+  mutate(cnv.status=ifelse(cnv.status, 2, 0),
+         tp53.8q=mutation.status + cnv.status,
+         tp53.8q=recode(tp53.8q, 
+                        `0`="Normal", 
+                        `1`="TP53", 
+                        `2`="8q", 
+                        `3`="TP53-8q")) %>%
+  select(sample.id, time1, event, tp53.8q) %T>% print()
+  
+tp53.8q.fit <- survfit(Surv(time1, event=event, type="right") ~ tp53.8q,
+                       data=tp53.8q.survival)
+
+ggsurvplot(tp53.8q.fit, 
+           legend.title="Genomic Events",
+           legend="right",
+           legend.labs=sub("^tp53\\.8q=", "", names(tp53.8q.fit$strata)),
+           xlab="Years after diagnosis", pval=T)
+
+save.figure("survival_prob_TP53-8q_event.png")
 ```
 
