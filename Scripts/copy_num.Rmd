@@ -63,7 +63,6 @@ save.figure("copy_nums_hist.png")
 
 Looking at the histogram shows that for most genes, there are less than 50 samples that have severe copy number aberrations; some genes have 50-150 samples with severe copy number aberrations; and a few genes have more than 150 samples with sever copy number aberrations.
 
-
 Show the top 20 genes (genes where the most number of samples had severe copy number aberrations).
 
 ```{r}
