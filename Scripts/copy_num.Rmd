@@ -1,0 +1,198 @@
+---
+title: "Copy Number"
+author: "Shun Sambongi"
+output: html_notebook
+---
+
+## Setup
+
+### Load required packages
+
+```{r}
+source("shun.R")
+use.package(dplyr)
+use.package(magrittr)
+use.package(tidyr)
+```
+
+
+### Import data
+
+Import data. Should already be filtered. Also, "tidy" the data to make it easier to work with.
+
+```{r}
+# Import copy number data
+copy_nums <- import.data("../Data/copy_nums_filtered.tsv")
+
+# Tidy data
+copy_nums %<>% rename(gene.symbol=`Gene Symbol`) %>% gather(sample.id, value, -gene.symbol)
+```
+
+
+## Analysis
+
+### Get counts
+
+For each gene, count the number of samples that have a certain value (-2, -1, 0, 1, 2).
+
+Furthermore, filter the counts to include only homozygous deletion (2) and high-level copy number amplification (-2). These will have the most effect on breast cancer. Combine the counts for the two categories into one sum to represent the number of samples with severe copy number aberrations for each gene.
+
+```{r}
+counts <- copy_nums %>% group_by(gene.symbol) %>% count(value) 
+
+# Filter counts to include only 2 and -2
+counts.filtered <- counts %>% 
+  filter(value==2 | value==-2) %>% 
+  group_by(gene.symbol) %>% 
+  summarise(n=sum(n)) %>% 
+  arrange(desc(n)) %T>% head(20)
+```
+
+### Visualize counts
+
+Plot this data to see how the counts are distributed.
+
+```{r}
+bins <- 100
+ggplot(counts.filtered, aes(n)) + 
+  geom_histogram(bins=bins, aes(y=..count../sum(..count..))) +
+  labs(x="Number of Samples", y="Frequency")
+
+save.figure("copy_nums_hist.png")
+```
+
+Looking at the histogram shows that for most genes, there are less than 50 samples that have severe copy number aberrations; some genes have 50-150 samples with severe copy number aberrations; and a few genes have more than 150 samples with sever copy number aberrations.
+
+
+Show the top 20 genes (genes where the most number of samples had severe copy number aberrations).
+
+```{r}
+# Get the top 20 genes
+top20 <- head(counts.filtered, 20) %T>% print()
+
+# Plot the genes in a bar chart
+padding <- 1
+ggplot(top20, aes(reorder(gene.symbol, n), n)) +
+  geom_bar(stat="identity") + 
+  geom_text(stat="identity", aes(label=n), hjust=-0.1) +
+  labs(x="Gene", y="Count") +
+  coord_flip(ylim=c(min(top20$n) - padding, max(top20$n) + padding))
+
+save.figure("copy_nums_top_20_genes.png")
+```
+
+Looking at the bar chart shows PVT, MYC, and CASC8 as the genes with the most severe deletions or amplifications. 
+
+What does this mean? I am not sure but this article seems relevant: [The PVT gene frequently amplifies with MYC in tumor cells.](https://www.ncbi.nlm.nih.gov/pubmed/2725491).
+
+Also from Wikipedia: [Myc](https://en.wikipedia.org/wiki/Myc)
+
+> A mutated version of Myc is found in many cancers, which causes Myc to be constitutively (persistently) expressed. This leads to the unregulated expression of many genes, some of which are involved in cell proliferation, and results in the formation of cancer...  Malfunctions in Myc have also been found in carcinoma of the cervix, colon, breast, lung and stomach. Myc is thus viewed as a promising target for anti-cancer drugs.
+
+> In the human genome, Myc is located on chromosome 8 and is believed to regulate expression of 15% of all genes through binding on enhancer box sequences (E-boxes) and recruiting histone acetyltransferases (HATs). This means that in addition to its role as a classical transcription factor, Myc also functions to regulate global chromatin structure by regulating histone acetylation both in gene-rich regions and at sites far from any known gene.
+
+
+### Get chromosome regions 
+
+Use the [biomaRt](https://bioconductor.org/packages/release/bioc/html/biomaRt.html) package to get the chromosome regions corresponding to each gene. 
+
+```{r}
+chrom.regions.file <- file.path(DATA_DIR, "chrom_regions")
+if (file.exists(paste0(chrom.regions.file, ".fst"))) {
+  chrom.regions <- import.data(chrom.regions.file)
+} else {
+  use.package(biomaRt, from = bioc)
+
+  ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
+
+  # Only use standard human chromosomes
+  normal.chroms <- c(1:22, "X", "Y", "M")
+
+  # Filter on HGNC symbol and chromosome, retrieve genomic location and band
+  gene.symbols <- counts$gene.symbol
+
+  chrom.regions <- getBM(attributes=c("hgnc_symbol", "chromosome_name", "band"),
+                         filters=c("hgnc_symbol", "chromosome_name"),
+                         values=list(hgnc_symbol=gene.symbols, chromosome_name=normal.chroms), 
+                         mart=ensembl)
+  detach.package(biomaRt)
+  save.data(chrom.regions, filename="chrom_regions.fst")
+}
+chrom.regions %<>% rename(gene.symbol=hgnc_symbol, chrom=chromosome_name)
+head(chrom.regions)
+```
+
+Join the chromosome regions with the counts.
+
+```{r}
+counts.with.regions <- counts.filtered %>% 
+  inner_join(chrom.regions) %T>% print()
+```
+
+This reveals something interesting. The top genes are all on the 8q arm. It seems like a good idea to see if severe deletions or amplifications on the 8q arm is correlated with breast cancer.
+
+### Visualize chromosome regions
+
+Instead of looking at each individual gene, aggregate the counts so we can compare just chromosomes. This requires some normalizing since not all chromosomes have the same number of genes.
+
+```{r}
+counts.with.regions %>% 
+  group_by(chrom) %>% 
+  summarise(n=sum(n), num_genes=n(), avg=n/num_genes) %>% 
+  arrange(desc(avg)) %>% 
+  ggplot(aes(reorder(chrom, avg), avg)) + 
+  geom_bar(stat="identity") +
+  geom_text(stat="identity", aes(label=round(avg)), hjust=-0.1) +
+  coord_flip() +
+  xlab("Chromosome") +
+  ylab("Mean No. of Copy Number Aberrations Per Gene")
+
+save.figure("copy_nums_chroms.png")
+```
+
+This bar chart again shows that chromosome 8 has the highest mean for samples with deletions and amplifications (There are on average 115 samples with deletion or amplification for genes on chromosome 8).
+
+Repeat again for chromosome regions.  
+
+```{r}
+counts.with.regions %>% 
+  mutate(band=sub("(^[pq])\\d+(\\.\\d+)?", "\\1", band)) %>% 
+  group_by(chrom, band) %>%
+  summarise(n=sum(n), num_genes=n(), avg=n/num_genes) %>%
+  arrange(desc(avg)) %>%
+  mutate(chrom.band=paste0(chrom, band)) %>%
+  head(20) %>%
+  ggplot(aes(reorder(chrom.band, avg), avg)) +
+  geom_bar(stat="identity") +
+  geom_text(stat="identity", aes(label=round(avg)), hjust=-0.1) +
+  coord_flip() +
+  xlab("Chromosome Region") +
+  ylab("Mean No. of Copy Number Aberrations Per Gene")
+
+save.figure("copy_nums_top_20_chrom_regions.png")
+```
+
+We can see that the the top chromosome region with the highest mean for samples with deletions and amplifications is on the 8q arm.
+
+
+Repeat again for chromosome regions, but more specific. 
+
+```{r}
+counts.with.regions %>% 
+  mutate(band=sub("(^[p|q]\\d+)(\\.\\d+)?", "\\1", band))  %>%
+  group_by(chrom, band) %>%
+  summarise(n=sum(n), num_genes=n(), avg=n/num_genes) %>%
+  arrange(desc(avg)) %>%
+  mutate(chrom.band=paste0(chrom, band)) %>%
+  head(20) %>%
+  ggplot(aes(reorder(chrom.band, avg), avg)) +
+  geom_bar(stat="identity") +
+  geom_text(stat="identity", aes(label=round(avg)), hjust=-0.1) +
+  coord_flip() +
+  xlab("Chromosome Region") +
+  ylab("Mean No. of Copy Number Aberrations Per Gene")
+    
+save.figure("copy_nums_top_20_chrom_regions_2.png")
+```
+
+We can see that the the top 3 chromosome regions with the highest mean for samples with deletions and amplifications are on the 8q arm.
