@@ -27,3 +27,6 @@ copy_nums.filtered <- copy_nums.raw %>% select(`Gene Symbol`, one_of(common.ids)
 
 
 # Save filtered datasets
+save.data(phenotype.filtered, filename="phenotype_filtered.tsv")
+save.data(mutations.filtered, filename="mutations_filtered.tsv")
+save.data(copy_nums.filtered, filename="copy_nums_filtered.tsv")
