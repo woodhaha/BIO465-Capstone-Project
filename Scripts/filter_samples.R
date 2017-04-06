@@ -3,6 +3,7 @@
 # Load required libraries
 source('shun.R')
 use.package(magrittr)
+use.package(dplyr)
 
 # Read in raw data
 phenotype.raw <- import.data("../Data/BRCA_clinicalMatrix")
@@ -11,7 +12,7 @@ copy_nums.raw <- import.data("../Data/Gistic2_CopyNumber_Gistic2_all_thresholded
 
 
 # Get sample ids
-phenotype.ids <- phenotype.raw$sampleID
+phenotype.ids <- phenotype.raw %>% filter(age_at_initial_pathologic_diagnosis < 80) %>% `$`(sampleID)
 mutations.ids <- colnames(mutations.raw)[-1]
 copy_nums.ids <- colnames(copy_nums.raw)[-1]
 
