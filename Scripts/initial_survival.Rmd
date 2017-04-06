@@ -1,0 +1,77 @@
+---
+title: "Initial Survival"
+author: "Shun Sambongi"
+output: html_notebook
+---
+
+## Setup
+
+### Load required packages
+
+```{r}
+source('shun.R')
+use.package(dplyr)
+use.package(magrittr)
+use.package(survival)
+use.package(survminer)
+use.package(tidyr)
+```
+
+### Import data
+
+```{r}
+phenotype <- import.data("../Data/phenotype_filtered.tsv")
+mutations <- import.data("../Data/mutations_filtered.tsv")
+copy_nums <- import.data("../Data/copy_nums_filtered.tsv")
+```
+
+### Format data
+
+```{r}
+# Phenotype data
+phenotype.filtered <- phenotype %>% 
+  select(sampleID, days_to_death, days_to_last_followup, vital_status) %>%
+  rename(sample.id=sampleID) %>%
+  mutate(years_to_death=days_to_death/365, 
+         years_to_last_followup=days_to_last_followup/365) %T>% print()
+
+# Mutation data
+mutations.tidy <- mutations %>% 
+  rename(gene.symbol=sample) %>% 
+  gather(sample.id, mutation.status, -gene.symbol) %T>% print()
+
+# Copy number data
+copy_nums.tidy <- copy_nums %>%
+  rename(gene.symbol=`Gene Symbol`) %>% 
+  gather(sample.id, cnv.status, -gene.symbol) %>% 
+  mutate(cnv.status=floor(abs(cnv.status) / 2))
+```
+
+
+## Analysis
+
+### Survival: TP53 mutation
+
+```{r}
+mutations.survival <- phenotype.filtered %>% 
+  mutate(time1=ifelse(is.na(years_to_death), 
+                      years_to_last_followup, 
+                      years_to_death), 
+         event=as.numeric(vital_status=="DECEASED")) %>% 
+  select(sample.id, time1, event) %>%
+  inner_join(mutations.tidy %>% filter(gene.symbol=="TP53")) %>%
+  select(sample.id, time1, event, mutation.status) %T>% print()
+
+mutations.fit <- survfit(Surv(time1, 
+                              event=event, 
+                              type="right") ~ mutation.status,
+                         data=mutations.survival)
+ggsurvplot(mutations.fit, 
+           legend.title="TP53 Mutation Status",
+           legend.labs=c("No Mutation", "Mutation"),
+           legend="right",
+           xlab="Years after diagnosis")
+
+save.figure("survival_prob_TP53_mutation")
+```
+
