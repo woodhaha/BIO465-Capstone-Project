@@ -1,0 +1,50 @@
+---
+title: "Parsing the Phenotype Data"
+author: "Ashton Omdahl"
+editor: "Shun Sambongi"
+output: html_document
+---
+
+
+## Load the relevant libraries  
+```{r}
+source('shun.r')
+use.package("readr")
+use.package("tidyr")
+use.package("dplyr")
+use.package("ggplot2")
+```
+
+##Import the data, keep just what we are interested in
+```{r}
+phenoRaw <- import.data("../Data/phenotype_filtered.tsv")
+
+phenoCore <- phenoRaw %>% 
+  select(sampleID, 
+         age_at_initial_pathologic_diagnosis, 
+         days_to_death, 
+         gender, 
+         PAM50Call_RNAseq,
+         breast_carcinoma_estrogen_receptor_status, 
+         histological_type, 
+         tumor_tissue_site) %>%
+  filter(age_at_initial_pathologic_diagnosis < 80)
+```
+
+Calculate the summary statistics of interest
+```{r}
+meanAgeAtDiagnosis <- mean(na.omit(phenoCore$age_at_initial_pathologic_diagnosis))
+meanDaysTillDeath <- mean(na.omit(phenoCore$days_to_death))
+
+#Different cancer types
+byType <- phenoCore %>% count(PAM50Call_RNAseq)
+
+#put this into a bar graph
+ggplot(data = byType, mapping = aes(x= PAM50Call_RNAseq, y = n)) + 
+  geom_bar(stat='identity', aes(fill=byType$PAM50Call_RNAseq)) + 
+  ylab("Patient Count") + 
+  xlab("Subtype Designation") + 
+  theme(legend.position = "none")
+
+save.figure("subtypes.png")
+```
