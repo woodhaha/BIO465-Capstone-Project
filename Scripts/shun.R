@@ -76,12 +76,13 @@ save.figure <- function(filename, dir=FIG_DIR) {
 # Will read in a  tsv file from dir as a data.frame
 # If there is a .fst file, it will load that for faster loading
 import.data <- function(filename, dir=DATA_DIR) {
+  filename <- gsub(paste0("^", DATA_DIR, "/?"), "", filename)
   path <- file.path(dir, filename)
   fstfile <- paste0(path, ".fst")
   if (file.exists(fstfile))
     read.fst(fstfile)
   else {
-    x <- read_tsv(file.path(directory, filename)) 
+    x <- read_tsv(file.path(dir, filename)) 
     write.fst(x, fstfile, compress=100)
     x
   }
