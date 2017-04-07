@@ -198,6 +198,9 @@ ggsurvplot(mutations.fit.censored,
            pval=TRUE)
 
 save.figure("tp53_KM_censored.png")
+
+
+survfit(Surv(time, event=event, type="right"), data=mutations.survival.censored)
 ```
 
 
@@ -232,7 +235,7 @@ tp53.8q.survival.censored <- mutations.survival.censored %>%
 tp53.8q.fit.censored <- survfit(Surv(time, event=event, type="right") ~ tp53.8q,
                        data=tp53.8q.survival.censored)
 
-ggsurvplot(tp53.8q.fit, 
+ggsurvplot(tp53.8q.fit.censored, 
            legend.title="Genomic Events",
            legend="right",
            legend.labs=sub("^tp53\\.8q=", "", names(tp53.8q.fit$strata)),

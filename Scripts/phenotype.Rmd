@@ -27,6 +27,7 @@ phenoCore <- phenoRaw %>%
          PAM50Call_RNAseq,
          breast_carcinoma_estrogen_receptor_status, 
          histological_type, 
+         vital_status,
          tumor_tissue_site) %>%
   filter(age_at_initial_pathologic_diagnosis < 80)
 ```
@@ -47,4 +48,6 @@ ggplot(data = byType, mapping = aes(x= PAM50Call_RNAseq, y = n)) +
   theme(legend.position = "none")
 
 save.figure("subtypes.png")
+
+hi <- phenoCore %>% filter(vital_status=="DECEASED") %>% `$`(days_to_death) %>% na.omit() %>% mean() / 365.25
 ```
