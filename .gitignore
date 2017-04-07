@@ -35,3 +35,5 @@ vignettes/*.pdf
 # Misc files specific to our project
 Data/
 Scripts/*.html
+Programs/
+Scripts/old/
