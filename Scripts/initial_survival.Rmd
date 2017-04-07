@@ -99,7 +99,7 @@ detach.package(biomaRt)
 head(chrom.regions)
 ```
 
-Parse out general chromosome area
+Parse out general chromosome regions
 
 ```{r}
 regions <- chrom.regions %>% 
@@ -160,5 +160,83 @@ ggsurvplot(tp53.8q.fit,
            xlab="Years after diagnosis", pval=T)
 
 save.figure("survival_prob_TP53-8q_event.png")
+```
+
+### Cox Proportional Hazard's Model
+
+```{r}
+fit <- coxph(Surv(time1, event) ~ mutation.status, data=mutations.survival)
+summary(fit)
+
+ggcoxadjustedcurves(fit)
+```
+
+### Misc
+
+```{r}
+phenotype %>% select(days_to_new_tumor_event_after_initial_treatment) %>% na.omit() %>% nrow()
+```
+
+
+### Survival:Censored at 5 years
+
+Censoring event time at 5 years. Any person who died after 5 years is considered "alive" and their time of event is set to 5 years. 
+
+```{r}
+## Are we censoring correctly?
+mutations.survival.censored <- mutations.survival %>% mutate(time=ifelse(time1 > 5, 5, time1),
+                                                             event=ifelse(time1 > 5, 0, 1)) 
+mutations.fit.censored <- survfit(Surv(time, 
+                                       event=event, 
+                                       type="right") ~ mutation.status,
+                                  data=mutations.survival.censored)
+ggsurvplot(mutations.fit.censored, 
+           legend.title="TP53 Mutation Status",
+           legend.labs=c("No Mutation", "Mutation"),
+           legend="right",
+           xlab="Years after diagnosis",
+           pval=TRUE)
+
+save.figure("tp53_KM_censored.png")
+```
+
+
+```{r}
+cnv.survival.censored <- cnv.survival %>% mutate(time=ifelse(time1 > 5, 5, time1),
+                                                 event=ifelse(time1 > 5, 0, 1)) 
+
+cnv.fit.censored <-survfit(Surv(time, event=event, type="right") ~ cnv.status,
+                           data=cnv.survival.censored)
+
+ggsurvplot(cnv.fit.censored, 
+           legend.title="8q CNV Status",
+           legend.labs=c("No CNV", "CNV"),
+           legend="right",
+           xlab="Years after diagnosis",
+           pval=T)
+```
+
+
+```{r}
+tp53.8q.survival.censored <- mutations.survival.censored %>%
+  inner_join(cnv.survival.censored) %>%
+  mutate(cnv.status=ifelse(cnv.status, 2, 0),
+         tp53.8q=mutation.status + cnv.status,
+         tp53.8q=recode(tp53.8q, 
+                        `0`="Normal", 
+                        `1`="TP53", 
+                        `2`="8q", 
+                        `3`="TP53-8q")) %>%
+  select(sample.id, time, event, tp53.8q) %T>% print()
+  
+tp53.8q.fit.censored <- survfit(Surv(time, event=event, type="right") ~ tp53.8q,
+                       data=tp53.8q.survival.censored)
+
+ggsurvplot(tp53.8q.fit, 
+           legend.title="Genomic Events",
+           legend="right",
+           legend.labs=sub("^tp53\\.8q=", "", names(tp53.8q.fit$strata)),
+           xlab="Years after diagnosis", pval=T)
+
 ```
 

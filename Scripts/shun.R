@@ -110,6 +110,11 @@ save.data <- function(x, filename, dir=DATA_DIR, compress=100, ext="fst") {
 }
 
 
+import.phenotype <- function() {
+  import.data("../Data/")
+}
+
+
 # Misc --------------------------------------------------------
 
 # Takes a vector of strings and\or expressions and returns vector of strings
