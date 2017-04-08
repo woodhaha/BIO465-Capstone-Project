@@ -185,7 +185,7 @@ Censoring event time at 5 years. Any person who died after 5 years is considered
 ```{r}
 ## Are we censoring correctly?
 mutations.survival.censored <- mutations.survival %>% mutate(time=ifelse(time1 > 5, 5, time1),
-                                                             event=ifelse(time1 > 5, 0, 1)) 
+                                                             event=ifelse(time1 > 5, 0, event)) 
 mutations.fit.censored <- survfit(Surv(time, 
                                        event=event, 
                                        type="right") ~ mutation.status,
@@ -200,7 +200,7 @@ ggsurvplot(mutations.fit.censored,
 save.figure("tp53_KM_censored.png")
 
 
-survfit(Surv(time, event=event, type="right"), data=mutations.survival.censored)
+print(survfit(Surv(time, event=event, type="right") ~ 1, data=mutations.survival.censored), rmean="individual")
 ```
 
 
@@ -242,4 +242,30 @@ ggsurvplot(tp53.8q.fit.censored,
            xlab="Years after diagnosis", pval=T)
 
 ```
+
+
+### KM: Cancer types
+
+```{r}
+subtypes.surv <- phenotype %>% 
+  select(PAM50Call_RNAseq,
+         days_to_death,
+         days_to_last_followup, 
+         vital_status) %>% 
+  mutate(time=ifelse(is.na(days_to_death), 
+                     days_to_last_followup, 
+                     days_to_death),
+         event=ifelse(vital_status=="DECEASED", 1, 0),
+         time=time/365.25,
+         event=ifelse(time > 5, 0, event),
+         time=ifelse(time > 5, 5, time)) %>% 
+  replace_na(list(PAM50Call_RNAseq="Other")) %>% 
+  select(subtype=PAM50Call_RNAseq, time, event) %T>%
+  print()
+
+subtypes.fit <- survfit(Surv(time, event) ~ subtype, data=subtypes.surv)
+
+ggsurvplot(subtypes.fit, legend="right")
+```
+
 
