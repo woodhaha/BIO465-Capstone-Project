@@ -1,0 +1,88 @@
+---
+title: "Feature Selection"
+output: html_notebook
+---
+
+```{r}
+source('shun.r')
+
+use.package(dplyr)
+use.package(magrittr)
+use.package(tidyr)
+```
+
+```{r}
+muts <- import.data("../Data/mutations_filtered.tsv")
+cnvs <- import.data("../Data/copy_nums_filtered.tsv")
+
+chrom.regions <- import.data("../Data/chrom_regions")
+```
+
+
+```{r}
+tidy <- function(x) {
+  x %>%
+    rename_(gene=names(.)[1]) %>%
+    gather(id, value, -gene)
+}
+
+tidy(muts) %T>%
+  print() ->
+  muts.tidy
+
+sample_count <- length(names(muts)[-1])
+cutoff <- round(sample_count * 0.05)
+
+muts.tidy %>% 
+  group_by(gene) %>%
+  summarise(sum=sum(floor(value))) %>%
+  filter(sum > cutoff & sum < sample_count - cutoff) %>% 
+  arrange(desc(sum)) %T>%
+  print() ->
+  muts.events
+```
+
+
+```{r}
+cnvs.tidy <- cnvs %>% rename(gene=`Gene Symbol`) %>% tidy()
+
+cnvs.tidy %>% 
+  arrange(value) %>% 
+  mutate(value = as.integer(value == 2 | value == -2)) %>%
+  group_by(gene) %>%
+  summarise(sum=sum(floor(value))) %>%
+  filter(sum > cutoff & sum < sample_count - cutoff) %>% 
+  arrange(desc(sum)) %T>%
+  print() ->
+  cnvs.events
+
+# cnvs.tidy %>%
+#   mutate(value = as.integer(value == 2 | value == -2)) %>%
+#   inner_join(chrom.regions, by = c("gene" = "hgnc_symbol")) %>%
+#   mutate(region=paste0(chromosome_name, sub("^([pq]).*", "\\1", band))) %>%
+#   select(region, id, value) %>%
+#   group_by(region) %>%
+#   summarise(sum=sum(value)) %>%
+#   arrange(desc(sum)) %T>%
+#   print() ->
+#   chrom.events
+
+cnvs.events %>%
+  inner_join(chrom.regions, by = c("gene" = "hgnc_symbol")) %>%
+  mutate(region=paste0(chromosome_name, sub("^([pq]).*", "\\1", band))) %>%
+  select(gene, sum, region) %>%
+  group_by(region) %>%
+  summarise(sum=sum(sum), count=n(), avg=sum/count) %>%
+  select(region, avg, sum, count) %>%
+  arrange(desc(avg)) %T>%
+  print() ->
+  chrome.events
+```
+
+
+```{r}
+save.data(muts.events, filename="mutation_events.tsv")
+save.data(cnvs.events, filename="cnv_events.tsv")
+save.data(chrom.events, filename="chrom_events.tsv")
+```
+

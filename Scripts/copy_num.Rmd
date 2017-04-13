@@ -154,12 +154,14 @@ This bar chart again shows that chromosome 8 has the highest mean for samples wi
 Repeat again for chromosome regions.  
 
 ```{r}
-counts.with.regions %>% 
+chrom.region.counts <- counts.with.regions %>% 
   mutate(band=sub("(^[pq])\\d+(\\.\\d+)?", "\\1", band)) %>% 
   group_by(chrom, band) %>%
   summarise(n=sum(n), num_genes=n(), avg=n/num_genes) %>%
   arrange(desc(avg)) %>%
-  mutate(chrom.band=paste0(chrom, band)) %>%
+  mutate(chrom.band=paste0(chrom, band)) 
+
+chrom.region.counts %>%
   head(20) %>%
   ggplot(aes(reorder(chrom.band, avg), avg)) +
   geom_bar(stat="identity") +

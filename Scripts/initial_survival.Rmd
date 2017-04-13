@@ -167,16 +167,7 @@ save.figure("survival_prob_TP53-8q_event.png")
 ```{r}
 fit <- coxph(Surv(time1, event) ~ mutation.status, data=mutations.survival)
 summary(fit)
-
-ggcoxadjustedcurves(fit)
 ```
-
-### Misc
-
-```{r}
-phenotype %>% select(days_to_new_tumor_event_after_initial_treatment) %>% na.omit() %>% nrow()
-```
-
 
 ### Survival:Censored at 5 years
 
@@ -184,8 +175,9 @@ Censoring event time at 5 years. Any person who died after 5 years is considered
 
 ```{r}
 ## Are we censoring correctly?
-mutations.survival.censored <- mutations.survival %>% mutate(time=ifelse(time1 > 5, 5, time1),
-                                                             event=ifelse(time1 > 5, 0, event)) 
+mutations.survival.censored <- mutations.survival %>% 
+  mutate(event=ifelse(time1 > 5, 0, event), 
+         time=ifelse(time1 > 5, 5, time1)) 
 mutations.fit.censored <- survfit(Surv(time, 
                                        event=event, 
                                        type="right") ~ mutation.status,
@@ -205,8 +197,9 @@ print(survfit(Surv(time, event=event, type="right") ~ 1, data=mutations.survival
 
 
 ```{r}
-cnv.survival.censored <- cnv.survival %>% mutate(time=ifelse(time1 > 5, 5, time1),
-                                                 event=ifelse(time1 > 5, 0, 1)) 
+cnv.survival.censored <- cnv.survival %>% 
+  mutate(time=ifelse(time1 > 5, 5, time1), 
+         event=ifelse(time1 > 5, 0, event)) 
 
 cnv.fit.censored <-survfit(Surv(time, event=event, type="right") ~ cnv.status,
                            data=cnv.survival.censored)
@@ -265,7 +258,17 @@ subtypes.surv <- phenotype %>%
 
 subtypes.fit <- survfit(Surv(time, event) ~ subtype, data=subtypes.surv)
 
-ggsurvplot(subtypes.fit, legend="right")
+ggsurvplot(subtypes.fit, legend="right", pval=T)
 ```
 
+### Cox Proportional Hazard's Model
 
+```{r}
+fit <- coxph(Surv(time, event) ~ mutation.status,
+             data=mutations.survival.censored)
+
+
+summary(fit)
+# str(fit)
+# unname(exp(fit$coefficients))
+```
