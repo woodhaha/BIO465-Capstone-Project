@@ -1,0 +1,29 @@
+---
+title: "Identify Prognostic Events"
+output: html_notebook
+---
+
+```{r}
+source('shun.r')
+
+use.package(magrittr)
+use.package(dplyr)
+use.package(tidyr)
+```
+
+
+```{r}
+muts.events <- import.data("../Data/mutation_events.tsv")
+chrom.events <- import.data("../Data/chrom_events.tsv")
+
+muts <- import.data("../Data/mutations_filtered.tsv")
+```
+
+
+```{r}
+muts %>%
+  rename(gene=sample) %>%
+  filter(gene %in% muts.events$gene) %>% 
+  gather(id, mut.status, -gene)
+```
+
