@@ -258,7 +258,9 @@ subtypes.surv <- phenotype %>%
 
 subtypes.fit <- survfit(Surv(time, event) ~ subtype, data=subtypes.surv)
 
-ggsurvplot(subtypes.fit, legend="right", pval=T)
+ggsurvplot(subtypes.fit, legend="right", pval=T, legend.labs = cs(Basal, Her2, LumA, LumB, Normal, Other))
+
+save.figure("KM_subtypes.png")
 ```
 
 ### Cox Proportional Hazard's Model

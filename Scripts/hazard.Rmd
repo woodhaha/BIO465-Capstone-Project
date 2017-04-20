@@ -1,0 +1,127 @@
+---
+title: "Run Hazard Thing :P!!!"
+output: html_notebook
+---
+
+```{r}
+source("shun.r")
+
+use.package(dplyr)
+use.package(magrittr)
+use.package(tidyr)
+use.package(broom)
+use.package(survival)
+use.package(survminer)
+use.package(purrr)
+```
+
+```{r}
+mut.events <- import.data("../Data/mutation_events.tsv")
+
+(cancer.genes <- read.table("../36BCGenes.tsv", as.is=TRUE))
+
+cnv <- import.data("copy_nums_filtered.tsv")
+
+cnv %>% 
+  rename(gene = `Gene Symbol`) %>%
+  filter(gene %in% cancer.genes$Gene.Symbol) %>%
+  gather(sample, cnv.status, -gene) %>%
+  mutate(cnv.status = as.integer(cnv.status == -2 | cnv.status == 2)) %>%
+  group_by(gene) %>%
+  summarise(sum = sum(cnv.status)) %>%
+  filter(sum > 45 & sum < 853) -> # MAYBE CHANGE LATER, ONLY GIVE US 5
+  cnv.events 
+```
+
+
+```{r}
+muts <- import.data("../Data/mutations_filtered.tsv")
+
+muts %>%
+  rename(mut.gene = sample) %>% 
+  filter(mut.gene %in% mut.events$gene) %>%
+  gather(sample, mut.status, -mut.gene) ->
+  muts.filtered
+
+cnv %>%
+  rename(cnv.gene = `Gene Symbol`) %>%
+  filter(cnv.gene %in% cnv.events$gene) %>%
+  gather(sample, cnv.status, -cnv.gene) ->
+  cnvs.filtered
+
+muts.filtered %>% 
+  inner_join(cnvs.filtered) %>% 
+  select(sample, mut.gene, mut.status, cnv.gene, cnv.status) ->
+  prog.events
+```
+
+```{r}
+pheno <- import.data("phenotype_filtered.tsv")
+
+pheno %<>% 
+  select(sampleID, days_to_death, days_to_last_followup, vital_status,
+         age_at_initial_pathologic_diagnosis) %>%
+  mutate(ytd = days_to_death / 365.25,
+         ytlf = days_to_last_followup / 365.25,
+         event = as.integer(vital_status == "DECEASED"),
+         time = ifelse(is.na(ytd), ytlf, ytd), 
+         event = ifelse(time > 5, 0, event),
+         time = ifelse(time > 5, 5, time)) %>%
+  select(sampleID, time, event, age_at_initial_pathologic_diagnosis) %>% 
+  rename(age = age_at_initial_pathologic_diagnosis, sample = sampleID)
+```
+
+
+```{r}
+# base.hazard <- unname(exp(coxph(Surv(time, event) ~ age, data=pheno)$coefficients))
+
+pheno %>%
+  inner_join(prog.events) %>%
+  mutate(interaction = paste0(mut.gene, "-", cnv.gene)) %>%
+  group_by(interaction) %>%
+  do({
+    fit <- coxph(Surv(time, event) ~ age + mut.status:cnv.status, data=.)
+    
+    tidy(fit) %>%
+      cbind(glance(fit)) %>%
+      filter(term != "age") %>% 
+      select(estimate) %>%
+      mutate(hazard.ratio = exp(estimate))
+  }) %>%
+  arrange(desc(hazard.ratio)) %T>%
+  print() ->
+  events
+```
+
+
+```{r}
+events %>%
+  tail(10) %>%
+  separate(interaction, into = c("mut.gene", "cnv.gene")) %>%
+  select(mut.gene, cnv.gene) %T>%
+  print() ->
+  top.interactions
+
+plot_interaction <- function(mut, cnv) {
+  muts.filtered %>%
+    mutate(mut.status = floor(mut.status)) %>%
+    filter(mut.gene == mut) %>%
+    inner_join({
+      cnvs.filtered %>%
+        filter(cnv.gene == cnv) %>%
+        mutate(cnv.status = as.integer(cnv.status == -2 | cnv.status == 2) * 2)
+    }) %>%
+    mutate(prog.status = mut.status + cnv.status) %>% 
+    select(sample, prog.status) %>% 
+    inner_join(pheno) ->
+    interesting
+
+  fit <- survfit(Surv(time, event) ~ as.factor(prog.status), data = interesting)
+  ggsurvplot(fit, legend = "right", pval = TRUE, legend.labs = c("Normal", mut, cnv, paste(mut, cnv, sep="-")))
+}
+
+apply(top.interactions, 1, function(x) plot_interaction(x["mut.gene"], x["cnv.gene"]))
+
+plot_interaction("MAP3K1", "PPM1D")
+```
+

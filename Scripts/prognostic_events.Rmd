@@ -9,21 +9,73 @@ source('shun.r')
 use.package(magrittr)
 use.package(dplyr)
 use.package(tidyr)
+use.package(survival)
 ```
 
 
 ```{r}
 muts.events <- import.data("../Data/mutation_events.tsv")
 chrom.events <- import.data("../Data/chrom_events.tsv")
+cnv.events <- import.data("../Data/cnv_events2.tsv")
 
 muts <- import.data("../Data/mutations_filtered.tsv")
+cnvs <- import.data("../Data/copy_nums_filtered.tsv")
+pheno <- import.data("../Data/phenotype_filtered.tsv")
 ```
 
 
 ```{r}
 muts %>%
-  rename(gene=sample) %>%
-  filter(gene %in% muts.events$gene) %>% 
-  gather(id, mut.status, -gene)
+  rename(mut.gene=sample) %>%
+  filter(mut.gene %in% muts.events$gene) %>% 
+  gather(id, mut.status, -mut.gene) %>%
+  mutate(mut.status = floor(mut.status)) %>%
+  select(id, mut.gene, mut.status) %T>%
+  print() ->
+  muts.filtered
+```
+
+```{r}
+cnvs %>%
+  rename(cnv.gene=`Gene Symbol`) %>%
+  filter(cnv.gene %in% cnv.events$gene) %>%
+  gather(id, cnv.status, -cnv.gene) %>%
+  mutate(cnv.status = as.integer((cnv.status == -2 | cnv.status == 2))) %T>%
+  print() ->
+  cnvs.filtered
+```
+
+
+```{r}
+muts.filtered %>%
+  inner_join(cnvs.filtered) %>%
+  mutate(prog.event = paste0(mut.gene, "-", cnv.gene),
+         cnv.status = cnv.status * 2,
+         prog.status = mut.status + cnv.status) %>%
+  select(id, prog.event, prog.status) %T>%
+  print() ->
+  prog.events
+```
+
+```{r}
+pheno %>% 
+  select(sampleID, days_to_death, days_to_last_followup, vital_status, 
+         age_at_initial_pathologic_diagnosis) %>%
+  rename(id = sampleID) %>%
+  mutate(event = as.integer(vital_status == "DECEASED"),
+         age = age_at_initial_pathologic_diagnosis,
+         over75 = as.integer(age > 75),
+         ytd = days_to_death / 365,
+         ytlf = days_to_last_followup / 365,
+         time = ifelse(is.na(ytd), ytlf, ytd),
+         event = ifelse(time > 5, 0, event),
+         time = ifelse(time > 5, 5, time)) %>%
+  select(id, age, over75, time, event) %T>%
+  print() ->
+  pheno.filtered
+```
+
+```{r}
+coxph(Surv(time, event) ~ age + , data=pheno.filtered)
 ```
 

@@ -16,8 +16,11 @@ muts <- import.data("../Data/mutations_filtered.tsv")
 cnvs <- import.data("../Data/copy_nums_filtered.tsv")
 
 chrom.regions <- import.data("../Data/chrom_regions")
-```
 
+read.table("../36BCGenes.tsv", quote = "\"", as.is = TRUE) %>% 
+  select(Gene.Symbol, Chr.Band) ->
+  cnv.genes
+```
 
 ```{r}
 tidy <- function(x) {
@@ -76,7 +79,7 @@ cnvs.events %>%
   select(region, avg, sum, count) %>%
   arrange(desc(avg)) %T>%
   print() ->
-  chrome.events
+  chrom.events
 ```
 
 
@@ -84,5 +87,19 @@ cnvs.events %>%
 save.data(muts.events, filename="mutation_events.tsv")
 save.data(cnvs.events, filename="cnv_events.tsv")
 save.data(chrom.events, filename="chrom_events.tsv")
+```
+
+```{r}
+cnvs %>%
+  rename(gene=`Gene Symbol`) %>%
+  filter(gene %in% cnv.genes$Gene.Symbol) %>% 
+  tidy() %>% 
+  mutate(value = as.integer(value == 2 | value == -2)) %>%
+  group_by(gene) %>%
+  summarise(sum=sum(floor(value))) %>%
+  filter(sum > cutoff & sum < sample_count - cutoff) %>% 
+  arrange(desc(sum)) %T>%
+  print() %>%
+  save.data(filename="cnv_events2.tsv")
 ```
 
