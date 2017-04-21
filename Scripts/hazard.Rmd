@@ -85,12 +85,14 @@ pheno %>%
     tidy(fit) %>%
       cbind(glance(fit)) %>%
       filter(term != "age") %>% 
-      select(estimate) %>%
+      select(estimate, p.value, p.value.log) %>%
       mutate(hazard.ratio = exp(estimate))
   }) %>%
   arrange(desc(hazard.ratio)) %T>%
   print() ->
   events
+
+(p.adjust(events$p.value.log, method = "fdr"))
 ```
 
 
@@ -102,26 +104,26 @@ events %>%
   print() ->
   top.interactions
 
-plot_interaction <- function(mut, cnv) {
-  muts.filtered %>%
-    mutate(mut.status = floor(mut.status)) %>%
-    filter(mut.gene == mut) %>%
-    inner_join({
-      cnvs.filtered %>%
-        filter(cnv.gene == cnv) %>%
-        mutate(cnv.status = as.integer(cnv.status == -2 | cnv.status == 2) * 2)
-    }) %>%
-    mutate(prog.status = mut.status + cnv.status) %>% 
-    select(sample, prog.status) %>% 
-    inner_join(pheno) ->
-    interesting
+mut <- "TP53"
+cnv <- "BRIP1"
 
-  fit <- survfit(Surv(time, event) ~ as.factor(prog.status), data = interesting)
-  ggsurvplot(fit, legend = "right", pval = TRUE, legend.labs = c("Normal", mut, cnv, paste(mut, cnv, sep="-")))
-}
+muts.filtered %>%
+  mutate(mut.status = floor(mut.status)) %>%
+  filter(mut.gene == mut) %>%
+  inner_join({
+    cnvs.filtered %>%
+      filter(cnv.gene == cnv) %>%
+      mutate(cnv.status = as.integer(cnv.status == -2 | cnv.status == 2) * 2)
+  }) %>%
+  mutate(prog.status = mut.status + cnv.status) %>% 
+  select(sample, prog.status) %>%
+  inner_join(pheno) %T>% 
+  print() ->
+  interesting
 
-apply(top.interactions, 1, function(x) plot_interaction(x["mut.gene"], x["cnv.gene"]))
+fit <- survfit(Surv(time, event) ~ as.factor(prog.status), data = interesting)
+ggsurvplot(fit, legend = "right", legend.labs = c("Control", paste0(mut, " (SNP)"), paste0(cnv, " (CNV)"), paste(mut, cnv, sep="-")))
 
-plot_interaction("MAP3K1", "PPM1D")
+save.figure(paste0(mut, "-", cnv, "_KM_curve.png"))
 ```
 
