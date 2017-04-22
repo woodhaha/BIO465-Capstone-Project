@@ -1,0 +1,65 @@
+---
+title: "Interesting Interactions"
+output: html_notebook
+---
+
+```{r, message = F, warning = F}
+source("shun.R")
+
+use.package(dplyr)
+use.package(magrittr)
+use.package(tidyr)
+use.package(ggplot2)
+```
+
+```{r}
+pheno <- import.data("../Data/phenotype_filtered.tsv")
+muts <- import.data("../Data/mutations_filtered.tsv")
+cnvs <- import.data("../Data/copy_nums_filtered.tsv")
+```
+
+```{r}
+mut <- "MLL3"
+cnv <- "ERBB2"
+
+muts %>%
+  rename(gene = sample) %>%
+  filter(gene == mut) %>% 
+  gather(sample, mut.status, -gene) %>%
+  filter(floor(mut.status) == 1) %>%
+  use_series(sample) %T>%
+  print() ->
+  mut.samples
+
+cnvs %>%
+  rename(gene = `Gene Symbol`) %>%
+  filter(gene == cnv) %>%
+  gather(sample, cnv.status, -gene) %>%
+  filter(cnv.status == 2 | cnv.status == -2) %>%
+  use_series(sample) %T>%
+  print() ->
+  cnv.samples
+
+common.samples <- intersect(mut.samples, cnv.samples)
+
+pheno %>%
+  filter(sampleID %in% common.samples) %>%
+  select(PAM50Call_RNAseq) %>%
+  ggplot(aes(PAM50Call_RNAseq)) + 
+  geom_bar() +
+  xlab("Subtype") +
+  ggtitle(paste0(mut, "-", cnv, " Cancer Subtypes"))
+
+save.figure(paste0(mut, "_", cnv, "_cancer_subtypes.png"))
+```
+
+```{r}
+cnvs %>%
+  rename(gene = `Gene Symbol`) %>%
+  filter(gene == "ERBB2") %>%
+  gather(sample, cnv.status, -gene) %>%
+  filter(cnv.status == 2 | cnv.status == -2) %>%
+  filter(sample %in% common.samples)
+```
+
+

@@ -93,6 +93,15 @@ pheno %>%
   events
 
 (p.adjust(events$p.value.log, method = "fdr"))
+
+events %>%
+  separate(interaction, into=c("SNP", "CNV")) %>%
+  select(SNP, CNV, hazard.ratio, p.value) %>%
+  rename(`Hazard Ratio` = hazard.ratio, `p value` = p.value) %>% 
+  head(10) ->
+  top10interactions
+
+save.data(top10interactions, filename="top_10_interactions.tsv")
 ```
 
 
