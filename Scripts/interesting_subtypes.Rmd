@@ -19,8 +19,8 @@ cnvs <- import.data("../Data/copy_nums_filtered.tsv")
 ```
 
 ```{r}
-mut <- "MLL3"
-cnv <- "ERBB2"
+mut <- "PIK3CA"
+cnv <- "BRIP1"
 
 muts %>%
   rename(gene = sample) %>%
@@ -46,9 +46,9 @@ pheno %>%
   filter(sampleID %in% common.samples) %>%
   select(PAM50Call_RNAseq) %>%
   ggplot(aes(PAM50Call_RNAseq)) + 
-  geom_bar() +
-  xlab("Subtype") +
-  ggtitle(paste0(mut, "-", cnv, " Cancer Subtypes"))
+  geom_bar(aes(fill = PAM50Call_RNAseq)) +
+  xlab("Subtype Designation") + 
+  ylab("Patient Count")
 
 save.figure(paste0(mut, "_", cnv, "_cancer_subtypes.png"))
 ```
